@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+body {
+  /* This creates a radial gradient from dark purple in the center to pure black at the edges */
+  background: radial-gradient(circle at center, #2a0845 0%, #1a0525 50%, #000000 100%);
+  color: white;
+  min-height: 100vh;
+}
+/* Add this to your app/globals.css to hide the scrollbar in the transcript panel */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
