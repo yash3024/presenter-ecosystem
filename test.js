@@ -1,292 +1,182 @@
-session = await ai.live.connect({
-            model: MODEL_NAME,
-            config: {
-                responseModalities: [Modality.AUDIO],
-                systemInstruction: { parts: [{ text: baseInstruction }] },
-                speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
-                    languageCode: "hi-IN"
-                },
-                tools: [{
-                    functionDeclarations: [{
-                        name: "send_loan_recovery_email",
-                        description: "Send a loan recovery payment reminder email to a customer with outstanding amount and payment link",
-                        parameters: {
-                            type: "OBJECT",
-                            properties: {
-                                recipientEmail: {
-                                    type: "STRING",
-                                    description: "Customer email address"
-                                },
-                                recipientName: {
-                                    type: "STRING",
-                                    description: "Customer full name"
-                                },
-                                outstandingAmount: {
-                                    type: "NUMBER",
-                                    description: "Outstanding loan amount to be paid"
-                                },
-                                paymentUrl: {
-                                    type: "STRING",
-                                    description: "Payment link for loan repayment"
-                                }
-                            },
-                            required: [
-                                "recipientEmail",
-                                "recipientName",
-                                "outstandingAmount",
-                                "paymentUrl"
-                           ]
-                        }
-                    }
-		    /* ,{
-                        name: "end_call",
-                        description: "End the collection call and save call disposition details",
+"use client";
 
-                        parameters: {
-                            type: "OBJECT",
+import { useRef, useState } from "react";
 
-                            properties: {
+export function useWebSocket({
+  audioContextRef, analyserRef, playbackTimeRef, playAudioChunk, stopAllAudio, startAudioWorklet, 
+  slides, setCurrentSlideIndex, currentSlideRef, lastSlideChangeTime,
+}) {
+  const [wsStatus, setWsStatus]   = useState("Disconnected");
+  const [transcript, setTranscript] = useState([]);
+  const [liveChunk, setLiveChunk]  = useState("");
 
-                                dispositionType: {
-                                    type: "STRING",
-                                    description: `
-Call disposition type.
+  const wsRef        = useRef(null);
+  const liveChunkRef = useRef("");
+  const turnIdRef    = useRef(0);
 
-Allowed values:
-- cb = Callback
-- rtp = Refuse to Pay
-- ptp = Promise to Pay
-- dis = Dispute
-- ws = Want Settlement
-- de = Death Case
-- ccu = Customer Cut Call / Call Cut Unexpectedly
-- cbil = CIBIL Cleanup Request
-                        `,
-                                    enum: [
-                                        "cb",
-                                        "rtp",
-                                        "ptp",
-                                        "dis",
-                                        "ws",
-                                        "de",
-                                        "ccu",
-                                        "cbil"
-                                    ]
-                                },
-
-                                remarks: {
-                                    type: "STRING",
-                                    description: "Short summary of the conversation"
-                                },
-
-                                callbackDate: {
-                                    type: "STRING",
-                                    description: `
-Required if dispositionType = cb.
-Callback follow-up date and time in ISO format.
-Example: 2026-05-25T14:30:00
-                        `
-                                },
-
-                                ptpAmount: {
-                                    type: "NUMBER",
-                                    description: `
-Required if dispositionType = ptp.
-Promised payment amount.
-                        `
-                                },
-
-                                ptpDate: {
-                                    type: "STRING",
-                                    description: `
-Required if dispositionType = ptp.
-Promised payment date in ISO format.
-Example: 2026-05-28
-                        `
-                                },
-
-                                settlementAmount: {
-                                    type: "NUMBER",
-                                    description: `
-Optional if dispositionType = ws.
-Settlement amount discussed with customer.
-                        `
-                                },
-
-                                disputeReason: {
-                                    type: "STRING",
-                                    description: `
-Required if dispositionType = dis.
-Reason for dispute raised by customer.
-                        `
-                                },
-
-                                deceasedRelation: {
-                                    type: "STRING",
-                                    description: `
-Optional if dispositionType = de.
-Who informed about death.
-Example: Son, Wife, Brother
-                        `
-                                },
-
-                                cibilIssue: {
-                                    type: "STRING",
-                                    description: `
-Optional if dispositionType = cbil.
-CIBIL cleanup related issue or request.
-                        `
-                                },
-
-                                customerIntent: {
-                                    type: "STRING",
-                                    description: `
-Overall customer intent.
-Examples:
-- cooperative
-- angry
-- not interested
-- will pay soon
-- requested callback
-                        `
-                                }
-                            },
-
-                            required: [
-                                "dispositionType",
-                                "remarks"
-                            ]
-                        }
-                    }*/
-
-                    ]
-                }],
-                
-
-            },
-            callbacks: {
-                onopen: () => console.log(`✅ [Gemini] Session opened for ${socket.remoteAddress}`),
-                onclose: () => console.log(`🔌 [Gemini] Session closed.`),
-                onerror: (e) => console.error("❌ [Gemini] Error:", e),
-                onmessage: (response) => {
-                    // Handle tool calls
-                    if (response.toolCall) {
-                        const functionCalls = response.toolCall.functionCalls;
-                        if (functionCalls && functionCalls.length > 0) {
-                            const functionResponses = functionCalls.map(call => {
-                                if (call.name === 'send_loan_recovery_email') {
-                                    console.log("📧 Tool Call: send_loan_recovery_email with args:", call.args);
-                                    const { recipientEmail, recipientName, outstandingAmount, paymentUrl } = call.args || {};
-                                    if (!recipientEmail || !recipientName || !outstandingAmount || !paymentUrl) {
-                                        return {
-                                            id: call.id,
-                                            name: call.name,
-                                            response: { error: 'Invalid arguments' }
-                                        };
-                                    }
-
-                                    sendMail(recipientEmail, recipientName, outstandingAmount, paymentUrl);
-
-                                    return {
-                                        id: call.id,
-                                        name: call.name,
-                                        response: { result: call.args }
-                                    };
-                                }else if (call.name === 'end_call') {
-                                    console.log("📋 Tool Call: end_call with args:", call.args);
-
-                                    if (callId) {
-                                        const { dispositionType, remarks, ...otherDetails } = call.args || {};
-                                        fetch('https://ai-agent.devloperhemant.com/api/webhook/call-details', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                callId: callId,
-                                                deposition: dispositionType,
-                                                remark: remarks,
-                                                otherDetails: Object.keys(otherDetails).length > 0 ? otherDetails : undefined
-                                            })
-                                        })
-                                        .then(res => console.log(`✅ Webhook Call-Details sent. Status: ${res.status}`))
-                                        .catch(err => console.error("❌ Webhook Call-Details Error:", err.message));
-                                    }
-
-                                    try{
-                                        session.close();
-                                        socket.destroy();
-                                    }catch(err){
-                                        console.error("❌ Error ending call session:", err);
-                                    }
-                                }
-                                return {
-                                    id: call.id,
-                                    name: call.name,
-                                    response: { error: 'Unknown tool' }
-                                };
-                            });
-
-                            if (session) {
-                                if (typeof session.sendToolResponse === 'function') {
-                                    session.sendToolResponse({ functionResponses });
-                                } else {
-                                    session.send({ toolResponse: { functionResponses } });
-                                }
-
-                            }
-                        }
-                    }
-
-                    // 1. EXTRACT WHAT THE USER SAID (Input Audio Transcript)
-                    if (response.serverContent?.inputTranscription?.text) {
-                        const userSpeechText = response.serverContent.inputTranscription.text;
-                        if (currentSpeaker !== 'user') {
-                            callTranscript += (callTranscript ? " , user : " : "user : ");
-                            currentSpeaker = 'user';
-                        }
-                        callTranscript += userSpeechText;
-
-
-                    }
-
-                    // 2. EXTRACT WHAT THE GEMINI MODEL IS SAYING (Output Audio Transcript)
-                    if (response.serverContent?.outputTranscription?.text) {
-                        const modelSpeechText = response.serverContent.outputTranscription.text;
-                        if (currentSpeaker !== 'model') {
-                            callTranscript += (callTranscript ? " , model : " : "model : ");
-                            currentSpeaker = 'model';
-                        }
-                        callTranscript += modelSpeechText;
-
-                    }
-
-                    if (response.serverContent?.modelTurn?.parts) {
-                        for (const part of response.serverContent.modelTurn.parts) {
-                            if (part.inlineData) {
-                                const audio24kHz = Buffer.from(part.inlineData.data, 'base64');
-                                geminiBuffer24k = Buffer.concat([geminiBuffer24k, audio24kHz]);
-
-                                const processableBytes = Math.floor(geminiBuffer24k.length / 6) * 6;
-                                if (processableBytes > 0) {
-                                    const chunkToProcess = geminiBuffer24k.slice(0, processableBytes);
-                                    geminiBuffer24k = geminiBuffer24k.slice(processableBytes);
-
-                                    const audio8kHz = downsample24to8(chunkToProcess);
-                                    asteriskBuffer8k = Buffer.concat([asteriskBuffer8k, audio8kHz]);
-                                }
-
-                                const FRAME_SIZE = 320;
-                                while (asteriskBuffer8k.length >= FRAME_SIZE) {
-                                    const frame = asteriskBuffer8k.slice(0, FRAME_SIZE);
-                                    asteriskBuffer8k = asteriskBuffer8k.slice(FRAME_SIZE);
-                                    playoutQueue.push(frame);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    } catch (err) {
-        console.error("❌ [Gemini] Start Error:", err);
+  const sendClientText = (text) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: true }
+      }));
     }
+  };
+
+  const connectWebSocket = () => {
+    setWsStatus("Connecting...");
+    const ws = new WebSocket("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setWsStatus("Connected");
+      ws.send(JSON.stringify({
+        setup: {
+          model: "models/gemini-3.1-flash-live-preview",
+          generationConfig: {
+            responseModalities: ["audio"],
+            thinkingConfig: { thinkingLevel: "minimal" },
+            speechConfig: {
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } },
+              languageCode: "en-IN", 
+            },
+          },
+          tools: [{
+            functionDeclarations: [{
+              name: "next_slide",
+              description: `REQUIRED TOOL. Call this tool when you finish discussing the current slide to advance to the next one. It takes no parameters.`,
+            }],
+          }],
+          systemInstruction: {
+            parts: [{
+              text: `You are an expert Indian Corporate AI Presenter. 
+              
+AUDIENCE ADAPTATION:
+- Target: Indian corporate professionals and students in a large hall.
+- Tone/Language: Professional, inclusive. Use Indian English with occasional Hindi words (Hinglish) where natural. Use inclusive plural phrasing.
+- Script: Begin your presentation explicitly with a warm 'Namaste', and conclude with a formal thank you.
+
+CRITICAL SLIDE SYNC PROTOCOL:
+1. You are presenting exactly ${slides.length} slides.
+2. WHEN YOU FINISH explaining a slide, you MUST call the 'next_slide' tool. 
+3. You cannot skip slides. The 'next_slide' tool will always push the presentation forward by exactly one slide.
+4. NEVER say "next slide please" out loud. The tool is the ONLY way to change the slide.
+5. After calling the tool, STOP SPEAKING completely.
+6. The system will flip the slide and reply with a SUCCESS message telling you the new slide number.
+7. ONLY WHEN you receive that message, immediately begin explaining the new slide.
+
+Q&A PROTOCOL (INTERRUPTIONS):
+If the user interrupts to ask a question, carefully listen to their audio and answer it naturally and politely. 
+Once you finish answering the question, seamlessly resume your presentation from the exact slide you are currently on. DO NOT call the 'next_slide' tool immediately after a question.
+
+STRICT CHARACTER RULE (NO META-COMMENTARY):
+NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the tool", or acknowledge system prompts out loud. Simply call the tool silently in the background and maintain your professional presentation persona.`
+            }],
+          },
+        },
+      }));
+
+      startAudioWorklet(ws).catch(err => setWsStatus("Error - AudioWorklet failed"));
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const text     = event.data instanceof Blob ? await event.data.text() : event.data;
+        const response = JSON.parse(text);
+
+        const getAudioDelay = () => {
+          if (!audioContextRef.current) return 0;
+          return Math.max(0, (playbackTimeRef.current - audioContextRef.current.currentTime) * 1000);
+        };
+
+        if (response.setupComplete) {
+          setWsStatus("System Live (Ready)");
+          if (slides.length > 0) {
+            const parts = [{ text: "SYSTEM: Presentation images are uploaded to your memory. Do NOT start speaking yet. Await the user's command to begin the presentation." }];
+            slides.forEach((s, i) => {
+              parts.push({ text: `--- [Slide ${i + 1}] ---` });
+              parts.push({ inlineData: { mimeType: s.mimeType, data: s.base64 } });
+            });
+            ws.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts }], turnComplete: true } }));
+          }
+          return;
+        }
+
+        if (response.toolCall?.functionCalls?.length) {
+          const delay = getAudioDelay(); 
+
+          setTimeout(() => {
+            const call = response.toolCall.functionCalls[0];
+            
+            if (call.name === "next_slide") {
+              const targetIdx = currentSlideRef.current + 1;
+              
+              if (targetIdx < slides.length) {
+                setCurrentSlideIndex(targetIdx);
+                if (lastSlideChangeTime) lastSlideChangeTime.current = Date.now();
+
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(JSON.stringify({ 
+                    toolResponse: { 
+                      functionResponses: [{
+                        id: call.id,
+                        name: call.name,
+                        response: { result: `SUCCESS. Slide ${targetIdx + 1} is now visible. System Command: WAKE UP and continue presenting immediately.` }
+                      }]
+                    } 
+                  }));
+                }
+              }
+            }
+          }, delay);
+          return; 
+        }
+
+        const parts = response.serverContent?.modelTurn?.parts;
+        if (parts) {
+          for (const p of parts) if (p.inlineData?.data) await playAudioChunk(p.inlineData.data);
+        }
+
+        const tx = response.serverContent?.outputTranscription;
+        
+        if (tx?.text) {
+          const turn = turnIdRef.current, delay = getAudioDelay(), word = tx.text;
+          setTimeout(() => {
+            if (turnIdRef.current !== turn) return;
+            liveChunkRef.current += word;
+            setLiveChunk(liveChunkRef.current);
+          }, delay);
+        }
+        
+        if (tx?.finished) {
+          const turn = turnIdRef.current, delay = getAudioDelay();
+          setTimeout(() => {
+            if (turnIdRef.current !== turn) return;
+            const c = liveChunkRef.current.trim();
+            if (c) setTranscript((p) => [...p.slice(-9), c]);
+            liveChunkRef.current = ""; setLiveChunk("");
+          }, delay + 120);
+        }
+
+        if (response.serverContent?.interrupted) {
+          stopAllAudio();
+          turnIdRef.current += 1;
+          if (liveChunkRef.current.trim()) setTranscript((p) => [...p.slice(-9), liveChunkRef.current.trim()]);
+          liveChunkRef.current = ""; setLiveChunk("");
+        }
+      } catch (e) {
+        console.error("WebSocket Message Error:", e);
+      }
+    };
+
+    ws.onclose = () => setWsStatus("Disconnected");
+    ws.onerror = () => setWsStatus("Error - check console");
+  };
+
+  const disconnect = (onReset) => {
+    wsRef.current?.close(); wsRef.current = null;
+    if (onReset) onReset();
+    turnIdRef.current += 1; liveChunkRef.current = ""; setLiveChunk(""); setWsStatus("Disconnected"); setTranscript([]);
+  };
+
+  return { wsStatus, wsRef, transcript, liveChunk, connectWebSocket, disconnect, sendClientText };
+}
