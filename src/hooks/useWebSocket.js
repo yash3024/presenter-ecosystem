@@ -59,7 +59,12 @@ export function useWebSocket({
 
   const connectWebSocket = () => {
     setWsStatus("Connecting...");
-    const ws = new WebSocket("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+    // Route connection to our secure backend proxy
+    const wsURL = process.env.NODE_ENV === "production" 
+      ? "wss://YOUR_CLOUD_RUN_URL" // We will fill this in Step 3!
+      : "ws://localhost:8080";
+
+    const ws = new WebSocket(wsURL);
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -205,11 +205,13 @@ export default function Home() {
     };
     const iv = setInterval(check, 1000);
     return () => clearInterval(iv);
-  }, [isLive, slides, sendClientText]); // NOTE: Removed slides.length from dependency, added 'slides' array
+  }, [isLive, slides, sendClientText]); 
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <main className="h-screen overflow-hidden flex flex-col items-center px-6 pt-5 pb-5 font-sans">
+    // 4K UPGRADE: Changed px-6 to px-[2vw] for dynamic wide-screen padding.
+    // NOTE: No bg-black added here so your global theme stays perfectly intact!
+    <main className="h-screen overflow-hidden flex flex-col items-center px-[2vw] pt-5 pb-5 font-sans">
       <Header
         wsStatus={wsStatus}
         presentationState={presentationState}
@@ -223,10 +225,12 @@ export default function Home() {
         handleForceNextSlide={handleForceNextSlide}
       />
 
-      <div className="flex w-full max-w-7xl flex-1 min-h-0 flex-col lg:flex-row gap-5">
+      {/* 4K UPGRADE: Replaced max-w-7xl with fluid max-w-[95vw] that scales to 2400px. Added transform-gpu. */}
+      <div className="flex w-full max-w-[95vw] 2xl:max-w-[2400px] flex-1 min-h-0 flex-col lg:flex-row gap-5 2xl:gap-8 transform-gpu">
         <SlideViewer slides={slides} currentSlideIndex={currentSlideIndex} onFileUpload={handleFileUpload} />
-        <div className="flex-1 min-h-0 flex flex-col gap-4">
-          
+        
+        {/* 4K UPGRADE: Added 2xl:gap-6 for better spacing on large screens */}
+        <div className="flex-1 min-h-0 flex flex-col gap-4 2xl:gap-6">
           <PresenterDisplay 
             currentState={
               !isLive ? "offline" 
