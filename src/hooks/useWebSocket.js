@@ -45,7 +45,7 @@ export function useWebSocket({
             } 
           });
       } else {
-         parts.push({ text: "SYSTEM WARNING: No slide image is available. Please ask the user to upload their slides." });
+          parts.push({ text: "SYSTEM WARNING: No slide image is available. Please ask the user to upload their slides." });
       }
       
       wsRef.current.send(JSON.stringify({ 
@@ -59,10 +59,10 @@ export function useWebSocket({
 
   const connectWebSocket = () => {
     setWsStatus("Connecting...");
-    // Route connection to our secure backend proxy
-    const wsURL = process.env.NODE_ENV === "production" 
-      ? "wss://YOUR_CLOUD_RUN_URL" // We will fill this in Step 3!
-      : "ws://localhost:8080";
+    
+    // Dynamically match your current local or deployment server address
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsURL = `${protocol}//${window.location.host}/api/ws`;
 
     const ws = new WebSocket(wsURL);
     wsRef.current = ws;
@@ -144,7 +144,7 @@ NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the 
             
             if (call.name === "next_slide") {
 
-              // --- STRICT ANTI-SKIP LOCK ADDED HERE ---
+              // --- STRICT ANTI-SKIP LOCK ---
               const now = Date.now();
               const timeSinceLastSlide = lastSlideChangeTime?.current ? (now - lastSlideChangeTime.current) : 20000;
 
@@ -161,7 +161,7 @@ NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the 
                       } 
                     }));
                   }
-                  return; // Completely stops the UI from skipping!
+                  return; 
               }
               // --- END ANTI-SKIP LOCK ---
 
@@ -172,7 +172,6 @@ NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the 
                 if (lastSlideChangeTime) lastSlideChangeTime.current = Date.now();
 
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
-                  // PROGRESSIVE LOADING: Attach the NEW slide image directly into the tool response!
                   const targetSlide = slides[targetIdx];
                   const parts = [
                     { text: `SUCCESS. Slide ${targetIdx + 1} is now visible. I have attached the image of this new slide below. System Command: WAKE UP and continue presenting immediately.` },
@@ -188,7 +187,6 @@ NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the 
                   }));
                 }
               } else {
-                 // End of presentation logic
                  if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ 
                       clientContent: { 
@@ -224,7 +222,6 @@ NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the 
           setTimeout(() => {
             if (turnIdRef.current !== turn) return;
             const c = liveChunkRef.current.trim();
-            // FIXED: Expanded the memory buffer to 100 chunks so it stops deleting!
             if (c.length > 0) {
               setTranscript((p) => [...p.slice(-100), c]);
             }
@@ -236,7 +233,6 @@ NEVER apologize to the system. NEVER say "Oh", "My apologies", "Let me call the 
           stopAllAudio();
           turnIdRef.current += 1;
           const c = liveChunkRef.current.trim();
-          // FIXED: Expanded memory buffer here too!
           if (c.length > 0) {
             setTranscript((p) => [...p.slice(-100), c]);
           }
