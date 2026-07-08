@@ -23,6 +23,7 @@ export default function Home() {
   const lastSlideChangeTime  = useRef(0);
   const lastRemoteCommandRef = useRef(null);
   const lastSpeechEndRef     = useRef(Date.now());
+  const askQuestionTimeoutRef = useRef(null);
 
   // ── HOOKS ──────────────────────────────────────────────────────────────────
   const {
@@ -108,17 +109,33 @@ export default function Home() {
   };
 
   const handleAskQuestion = () => {
-    stopAllAudio(); 
+    // Clear any existing timeout
+    if (askQuestionTimeoutRef.current) {
+      clearTimeout(askQuestionTimeoutRef.current);
+    }
+    stopAllAudio();
     sendClientText(`SYSTEM COMMAND: A user has a question. Say "Yes, please go ahead" and listen to them.`);
-    setMicActive(true); 
+    setMicActive(true);
     setPresentationState("asking");
+
+    // Set a timeout to automatically exit asking state after 30 seconds of no user action
+    askQuestionTimeoutRef.current = setTimeout(() => {
+      // If still in asking state, automatically finish
+      if (presentationState === "asking") {
+        handleFinishQuestion();
+      }
+    }, 30000); // 30 seconds
   };
 
   const handleFinishQuestion = () => {
-    setMicActive(false); 
-    lastSpeechEndRef.current = Date.now(); 
-    lastSlideChangeTime.current = Date.now(); 
-    setPresentationState("playing"); 
+    if (askQuestionTimeoutRef.current) {
+      clearTimeout(askQuestionTimeoutRef.current);
+      askQuestionTimeoutRef.current = null;
+    }
+    setMicActive(false);
+    lastSpeechEndRef.current = Date.now();
+    lastSlideChangeTime.current = Date.now();
+    setPresentationState("playing");
   };
 
   const handleForceNextSlide = () => {
