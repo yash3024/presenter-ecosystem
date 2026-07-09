@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useAudio }       from "@/hooks/useAudio";
-import { useWebSocket }   from "@/hooks/useWebSocket";
+import { useAudio } from "@/hooks/useAudio";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { processSlideFiles } from "@/utils/slideUtils";
 
-import Header            from "@/components/Header";
-import SlideViewer       from "@/components/SlideViewer";
-import PresenterDisplay  from "@/components/PresenterDisplay";
-import DiagnosticsPanel  from "@/components/DiagnosticsPanel";
+import Header from "@/components/Header";
+import SlideViewer from "@/components/SlideViewer";
+import PresenterDisplay from "@/components/PresenterDisplay";
+import DiagnosticsPanel from "@/components/DiagnosticsPanel";
 
 export default function Home() {
   const [slides, setSlides] = useState([]);
@@ -16,6 +16,7 @@ export default function Home() {
   const [presentationState, setPresentationState] = useState("idle"); 
 
   const currentSlideRef = useRef(0);
+  
   useEffect(() => {
     currentSlideRef.current = currentSlideIndex;
   }, [currentSlideIndex]);
@@ -23,7 +24,6 @@ export default function Home() {
   const lastSlideChangeTime  = useRef(0);
   const lastRemoteCommandRef = useRef(null);
   const lastSpeechEndRef     = useRef(Date.now());
-  const askQuestionTimeoutRef = useRef(null);
 
   // ── HOOKS ──────────────────────────────────────────────────────────────────
   const {
@@ -57,7 +57,7 @@ export default function Home() {
         const silenceDuration = (Date.now() - lastSpeechEndRef.current) / 1000;
         const timeSinceSlideChange = (Date.now() - lastSlideChangeTime.current) / 1000;
 
-        // FIXED: Give the AI time to process the new image! 
+        // Give the AI time to process the new image! 
         // Only nudges if totally silent for 10s AND has been on the slide for at least 20s.
         if (silenceDuration > 10 && timeSinceSlideChange > 20) {
           console.log(`[TELEPROMPTER] AI stalled for ${silenceDuration}s. Nudging AI.`);
@@ -69,7 +69,7 @@ export default function Home() {
     }, 1000);
 
     return () => clearInterval(silenceWatcher);
-  }, [isLive, presentationState, currentSlideIndex, slides.length, sendClientText, audioContextRef, playbackTimeRef]);
+  }, [isLive, presentationState, currentSlideIndex, slides.length, sendClientText]);
 
   // ── 1. ONE-CLICK CONNECT ───────────────────────────────────────────────────
   const handleConnect = async () => {
@@ -109,33 +109,21 @@ export default function Home() {
   };
 
   const handleAskQuestion = () => {
-    // Clear any existing timeout
-    if (askQuestionTimeoutRef.current) {
-      clearTimeout(askQuestionTimeoutRef.current);
-    }
-    stopAllAudio();
+    stopAllAudio(); 
     sendClientText(`SYSTEM COMMAND: A user has a question. Say "Yes, please go ahead" and listen to them.`);
-    setMicActive(true);
+    setMicActive(true); 
     setPresentationState("asking");
-
-    // Set a timeout to automatically exit asking state after 30 seconds of no user action
-    askQuestionTimeoutRef.current = setTimeout(() => {
-      // If still in asking state, automatically finish
-      if (presentationState === "asking") {
-        handleFinishQuestion();
-      }
-    }, 30000); // 30 seconds
   };
 
   const handleFinishQuestion = () => {
-    if (askQuestionTimeoutRef.current) {
-      clearTimeout(askQuestionTimeoutRef.current);
-      askQuestionTimeoutRef.current = null;
-    }
-    setMicActive(false);
-    lastSpeechEndRef.current = Date.now();
-    lastSlideChangeTime.current = Date.now();
-    setPresentationState("playing");
+    setMicActive(false); 
+    lastSpeechEndRef.current = Date.now(); 
+    lastSlideChangeTime.current = Date.now(); 
+    
+    // NEW FIX: Tell the AI exactly how to handle the silence!
+    sendClientText("SYSTEM COMMAND: The user's microphone is now off. If the user asked a question, answer it now and then seamlessly resume the presentation. If the user was silent or did not ask anything, simply resume the presentation smoothly from exactly where you left off. DO NOT apologize.");
+    
+    setPresentationState("playing"); 
   };
 
   const handleForceNextSlide = () => {
@@ -184,6 +172,7 @@ export default function Home() {
   // ── REMOTE COMMAND POLLING ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isLive || !slides.length) return;
+    
     const check = async () => {
       try {
         const response = await fetch("/api/remote");
@@ -220,14 +209,13 @@ export default function Home() {
         }
       } catch (_) {}
     };
+    
     const iv = setInterval(check, 1000);
     return () => clearInterval(iv);
   }, [isLive, slides, sendClientText]); 
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    // 4K UPGRADE: Changed px-6 to px-[2vw] for dynamic wide-screen padding.
-    // NOTE: No bg-black added here so your global theme stays perfectly intact!
     <main className="h-screen overflow-hidden flex flex-col items-center px-[2vw] pt-5 pb-5 font-sans">
       <Header
         wsStatus={wsStatus}
@@ -242,11 +230,9 @@ export default function Home() {
         handleForceNextSlide={handleForceNextSlide}
       />
 
-      {/* 4K UPGRADE: Replaced max-w-7xl with fluid max-w-[95vw] that scales to 2400px. Added transform-gpu. */}
       <div className="flex w-full max-w-[95vw] 2xl:max-w-[2400px] flex-1 min-h-0 flex-col lg:flex-row gap-5 2xl:gap-8 transform-gpu">
         <SlideViewer slides={slides} currentSlideIndex={currentSlideIndex} onFileUpload={handleFileUpload} />
         
-        {/* 4K UPGRADE: Added 2xl:gap-6 for better spacing on large screens */}
         <div className="flex-1 min-h-0 flex flex-col gap-4 2xl:gap-6">
           <PresenterDisplay 
             currentState={
